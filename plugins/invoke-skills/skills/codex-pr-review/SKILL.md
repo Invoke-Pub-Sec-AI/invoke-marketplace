@@ -20,6 +20,11 @@ The runner uses the installed Codex CLI and its saved sign-in. To publish
 directly, provide `GH_TOKEN` or `GITHUB_TOKEN` with pull request write access.
 For a GitHub App installation token, also pass `--reviewer-login` with the
 app's bot login.
+Direct publishing uses a lock in the user's cache directory. If that directory
+is read-only, set `INVOKE_CODEX_REVIEW_LOCK_DIR` to a writable, private absolute
+directory. Use the same directory for every local review run.
+On Windows, keep that directory under a user-private profile location or
+check its access permissions before configuring an override.
 If a connected GitHub tool can write reviews but the shell lacks a token, run
 with `--preview`. For private PRs, the preview still needs GitHub read access.
 When the preview returns findings, verify they are actionable and the PR head
@@ -31,7 +36,8 @@ If credentials are available only in GitHub Actions, check the **Codex PR
 review** run for the PR's current head. Use its result if it completed, wait
 if it is running, or rerun it when the user asks to run the review and a
 retry is appropriate. Once the hook is on the default branch, it starts on PR
-open, new commits, reopening, and transition out of draft.
+open, new commits, reopening, transition out of draft, and retargeting to the
+default branch.
 
 The runner uses Codex's [review prompt](references/review-prompt.md) and
 posts one GitHub review with inline comments when it has actionable
