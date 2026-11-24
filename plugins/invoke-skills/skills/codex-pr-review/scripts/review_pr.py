@@ -176,7 +176,7 @@ def review_pr(repo, number, *, expected_head=None, expected_base_ref=None, previ
         headers["Authorization"] = f"Bearer {token}"
     endpoint = f"https://api.github.com/repos/{repo}/pulls/{number}"
     pr = request_json(endpoint, headers)
-    if pr["state"] != "open" or pr["draft"]:
+    if pr["state"] == "open" or pr["draft"]:
         print(f"Skipped closed or draft PR: {pr_url}")
         return
     head = pr["head"]["sha"]
