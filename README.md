@@ -37,8 +37,10 @@ connected GitHub tool or directly with `GH_TOKEN` or `GITHUB_TOKEN` that has
 pull request write access. Use `--preview` for a review without posting.
 
 The [GitHub Actions hook](.github/workflows/codex-pr-review.yml) runs the same
-reviewer on new and updated non-draft PRs from branches in this repository.
-Add `OPENAI_API_KEY` to the repository's Actions secrets to enable CI reviews.
+reviewer on new and updated non-draft PRs targeting the default branch from
+branches in this repository. It runs the reviewer from the trusted base
+revision. The hook must be on the default branch and the repository must have
+an `OPENAI_API_KEY` Actions secret.
 For an existing PR, use the skill locally or rerun its review job. Each run
 sends the PR title, description, and complete textual patches to Codex. GitHub
 receives inline comments only for findings that resolve to changed lines.

@@ -29,12 +29,15 @@ class ReviewTests(unittest.TestCase):
         self.published = []
         self.findings = []
         self.updated_head = None
+        self.existing_reviews = []
 
     def request(self, url, headers, payload=None):
+        if url == "https://api.github.com/user":
+            return {"login": "reviewer"}
         if url.endswith("/files?per_page=100&page=1"):
             return [self.file]
         if url.endswith("/reviews?per_page=100&page=1"):
-            return []
+            return self.existing_reviews
         if url.endswith("/reviews"):
             self.published.append(payload)
             return {"html_url": "https://github.com/owner/repo/pull/1#pullrequestreview-1"}
@@ -71,6 +74,15 @@ class ReviewTests(unittest.TestCase):
         self.assertEqual(review["commit_id"], self.pr["head"]["sha"])
         self.assertEqual(review["event"], "COMMENT")
         self.assertEqual(review["comments"], [valid])
+
+    def test_duplicate_marker_counts_only_for_the_authenticated_reviewer(self):
+        marker = f'<!-- invoke-codex-pr-review:{self.pr["base"]["sha"]}:{self.pr["head"]["sha"]} -->'
+        self.findings = [{"path": "example.txt", "line": 10, "side": "RIGHT", "body": "Fix the addition."}]
+        self.existing_reviews = [{"user": {"login": "different-user"}, "body": marker}]
+        self.assertIn("Posted 1 Codex inline comment", self.run_review())
+        self.existing_reviews.append({"user": {"login": "REVIEWER"}, "body": marker})
+        self.assertIn("An inline review by reviewer already exists", self.run_review())
+        self.assertEqual(len(self.published), 1)
 
     def test_does_not_post_for_clean_review(self):
         self.assertIn("no actionable findings", self.run_review())

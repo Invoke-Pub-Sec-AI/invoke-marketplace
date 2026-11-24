@@ -47,6 +47,14 @@ def github_pages(url, headers):
         page += 1
 
 
+def has_review(endpoint, headers, marker, login):
+    return any(
+        (review.get("user") or {}).get("login", "").casefold() == login.casefold()
+        and marker in (review.get("body") or "")
+        for review in github_pages(f"{endpoint}/reviews", headers)
+    )
+
+
 def changed_lines(patch):
     anchors = set()
     old_line = new_line = None
@@ -154,7 +162,7 @@ def inline_comments(findings, anchors):
     return comments
 
 
-def review_pr(repo, number, expected_head=None, preview=False):
+def review_pr(repo, number, expected_head=None, preview=False, reviewer_login=None):
     token = os.getenv("GH_TOKEN") or os.getenv("GITHUB_TOKEN")
     pr_url = f"https://github.com/{repo}/pull/{number}"
     if not token and not preview:
@@ -177,9 +185,11 @@ def review_pr(repo, number, expected_head=None, preview=False):
         print(f"Skipped outdated workflow run: {pr_url}")
         return
     marker = f"<!-- invoke-codex-pr-review:{base}:{head} -->"
-    if not preview and any(marker in (review["body"] or "") for review in github_pages(f"{endpoint}/reviews", headers)):
-        print(f"An inline review already exists for this PR revision: {pr_url}")
-        return
+    if not preview:
+        reviewer_login = reviewer_login or request_json("https://api.github.com/user", headers)["login"]
+        if has_review(endpoint, headers, marker, reviewer_login):
+            print(f"An inline review by {reviewer_login} already exists for this PR revision: {pr_url}")
+            return
 
     files = list(github_pages(f"{endpoint}/files", headers))
     if len(files) != pr["changed_files"]:
@@ -210,8 +220,8 @@ def review_pr(repo, number, expected_head=None, preview=False):
     if preview:
         print(json.dumps(review))
         return
-    if any(marker in (existing["body"] or "") for existing in github_pages(f"{endpoint}/reviews", headers)):
-        print(f"An inline review already exists for this PR revision: {pr_url}")
+    if has_review(endpoint, headers, marker, reviewer_login):
+        print(f"An inline review by {reviewer_login} already exists for this PR revision: {pr_url}")
         return
     result = request_json(f"{endpoint}/reviews", headers, review)
     print(f"Posted {len(comments)} Codex inline comment(s): {result['html_url']}")
@@ -223,13 +233,14 @@ def main():
     parser.add_argument("number", type=int, help="Pull request number")
     parser.add_argument("--expected-head", help="Skip if the PR has advanced from this commit")
     parser.add_argument("--preview", action="store_true", help="Print validated findings without posting them")
+    parser.add_argument("--reviewer-login", help="Posting identity for a GitHub App installation token")
     args = parser.parse_args()
     if not re.fullmatch(r"[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+", args.repo) or args.number < 1:
         parser.error("Expected OWNER/REPO and a positive pull request number")
     if any(part in {".", ".."} for part in args.repo.split("/")):
         parser.error("Repository segments must be names")
     try:
-        review_pr(args.repo, args.number, args.expected_head, args.preview)
+        review_pr(args.repo, args.number, args.expected_head, args.preview, args.reviewer_login)
     except (RuntimeError, KeyError, TypeError, ValueError, TimeoutError) as error:
         print(f"Review failed: {error}", file=sys.stderr)
         return 1

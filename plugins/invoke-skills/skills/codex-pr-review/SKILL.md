@@ -22,14 +22,14 @@ If a connected GitHub tool can write reviews but the shell lacks a token, run
 with `--preview`. For private PRs, the preview still needs GitHub read access.
 When the preview returns findings, verify they are actionable and the PR head
 still matches the returned commit. Submit its comments as a single GitHub
-`COMMENT` review at that commit. Check for the returned review marker before
-posting to avoid duplicates.
+`COMMENT` review at that commit. Before posting, check whether the connected
+reviewer already posted the returned marker.
 
 If credentials are available only in GitHub Actions, check the **Codex PR
 review** run for the PR's current head. Use its result if it completed, wait
 if it is running, or rerun it when the user asks to run the review and a
-retry is appropriate. This repository's workflow starts on PR open, new
-commits, reopening, and transition out of draft.
+retry is appropriate. Once the hook is on the default branch, it starts on PR
+open, new commits, reopening, and transition out of draft.
 
 The runner uses Codex's [review prompt](references/review-prompt.md) and
 posts one GitHub review with inline comments when it has actionable
