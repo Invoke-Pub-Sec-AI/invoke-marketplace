@@ -1,0 +1,3 @@
+interface:
+  display_name: "Git and GitHub Preferences"
+  short_description: "Use git and gh for feature branches, commits, and pull requests"

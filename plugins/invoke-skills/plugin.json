@@ -1,13 +1,13 @@
 {
   "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
   "name": "invoke-skills",
-  "version": "0.1.4",
-  "description": "Project guidance for Agentic Auditor and Air University, pull request summaries, and marketplace maintenance.",
+  "version": "0.2.0",
+  "description": "Project guidance for Agentic Auditor and Air University, plus Git workflows, pull request summaries, and marketplace maintenance.",
   "extensions": {
     "com.openai": {
       "interface": {
         "displayName": "Invoke Skills",
-        "shortDescription": "Project skills for Agentic Auditor and Air University",
+        "shortDescription": "Work on AA, AU, and focused Git changes",
         "category": "Developer Tools"
       }
     }

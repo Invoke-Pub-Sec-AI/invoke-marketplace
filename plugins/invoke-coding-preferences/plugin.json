@@ -1,0 +1,15 @@
+{
+  "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
+  "name": "invoke-coding-preferences",
+  "version": "0.1.0",
+  "description": "Opt-in Git and GitHub CLI preferences for feature branches, commits, and pull requests.",
+  "extensions": {
+    "com.openai": {
+      "interface": {
+        "displayName": "Git and GitHub Preferences",
+        "shortDescription": "Use git and gh for branches, commits, and pull requests",
+        "category": "Developer Tools"
+      }
+    }
+  }
+}
