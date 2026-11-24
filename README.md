@@ -34,7 +34,9 @@ for the manifest and marketplace formats.
 In Codex, ask `@Invoke Skills` to use `codex-pr-review` on a GitHub PR URL.
 The skill uses your signed-in Codex CLI. It can post inline findings through a
 connected GitHub tool or directly with `GH_TOKEN` or `GITHUB_TOKEN` that has
-pull request write access. Use `--preview` for a review without posting.
+pull request write access. For GitHub App installation tokens, pass the
+app's bot login with `--reviewer-login`. Use `--preview` for a review without
+posting.
 
 The [GitHub Actions hook](.github/workflows/codex-pr-review.yml) runs the same
 reviewer on new and updated non-draft PRs targeting the default branch from

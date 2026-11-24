@@ -18,6 +18,8 @@ python3 /path/to/codex-pr-review/scripts/review_pr.py OWNER/REPO PR_NUMBER
 
 The runner uses the installed Codex CLI and its saved sign-in. To publish
 directly, provide `GH_TOKEN` or `GITHUB_TOKEN` with pull request write access.
+For a GitHub App installation token, also pass `--reviewer-login` with the
+app's bot login.
 If a connected GitHub tool can write reviews but the shell lacks a token, run
 with `--preview`. For private PRs, the preview still needs GitHub read access.
 When the preview returns findings, verify they are actionable and the PR head

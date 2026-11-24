@@ -19,7 +19,8 @@ class ReviewTests(unittest.TestCase):
     def setUp(self):
         self.pr = {
             "state": "open", "draft": False, "title": "Replace line", "body": "",
-            "head": {"sha": "b" * 40}, "base": {"sha": "a" * 40}, "changed_files": 1,
+            "head": {"sha": "b" * 40}, "base": {"sha": "a" * 40, "ref": "main"},
+            "changed_files": 1,
         }
         self.file = {
             "filename": "example.txt",
@@ -30,6 +31,8 @@ class ReviewTests(unittest.TestCase):
         self.findings = []
         self.updated_head = None
         self.existing_reviews = []
+        self.retarget_on_final_review_lookup = False
+        self.review_lookups = 0
 
     def request(self, url, headers, payload=None):
         if url == "https://api.github.com/user":
@@ -37,6 +40,9 @@ class ReviewTests(unittest.TestCase):
         if url.endswith("/files?per_page=100&page=1"):
             return [self.file]
         if url.endswith("/reviews?per_page=100&page=1"):
+            self.review_lookups += 1
+            if self.review_lookups > 1 and self.retarget_on_final_review_lookup:
+                self.pr["base"]["ref"] = "other"
             return self.existing_reviews
         if url.endswith("/reviews"):
             self.published.append(payload)
@@ -47,8 +53,9 @@ class ReviewTests(unittest.TestCase):
         self.pr_seen = True
         return pr
 
-    def run_review(self, preview=False):
+    def run_review(self, preview=False, **options):
         self.pr_seen = False
+        self.review_lookups = 0
         env = {} if preview else {"GH_TOKEN": "github-test-token"}
         with (
             patch.dict("os.environ", env, clear=True),
@@ -56,7 +63,7 @@ class ReviewTests(unittest.TestCase):
             patch.object(reviewer, "ask_codex", return_value=self.findings),
             contextlib.redirect_stdout(io.StringIO()) as output,
         ):
-            reviewer.review_pr("owner/repo", 1, preview=preview)
+            reviewer.review_pr("owner/repo", 1, preview=preview, **options)
             return output.getvalue()
 
     def test_preview_maps_inline_findings_without_auth_or_posting(self):
@@ -93,6 +100,18 @@ class ReviewTests(unittest.TestCase):
         self.findings = [{"path": "example.txt", "line": 10, "side": "RIGHT", "body": "Fix the addition."}]
         with self.assertRaisesRegex(RuntimeError, "PR changed during review"):
             self.run_review()
+        self.assertEqual(self.published, [])
+
+    def test_outdated_event_skips_a_retargeted_pr(self):
+        self.pr["base"]["ref"] = "other"
+        self.assertIn("Skipped outdated workflow run", self.run_review(expected_base_ref="main"))
+        self.assertEqual(self.review_lookups, 0)
+
+    def test_retarget_after_duplicate_lookup_prevents_posting(self):
+        self.retarget_on_final_review_lookup = True
+        self.findings = [{"path": "example.txt", "line": 10, "side": "RIGHT", "body": "Fix the addition."}]
+        with self.assertRaisesRegex(RuntimeError, "PR changed during review"):
+            self.run_review(expected_base_ref="main")
         self.assertEqual(self.published, [])
 
     def test_incomplete_patch_is_not_reviewed(self):

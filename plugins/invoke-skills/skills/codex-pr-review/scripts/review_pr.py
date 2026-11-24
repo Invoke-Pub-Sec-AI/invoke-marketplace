@@ -162,7 +162,7 @@ def inline_comments(findings, anchors):
     return comments
 
 
-def review_pr(repo, number, expected_head=None, preview=False, reviewer_login=None):
+def review_pr(repo, number, *, expected_head=None, expected_base_ref=None, preview=False, reviewer_login=None):
     token = os.getenv("GH_TOKEN") or os.getenv("GITHUB_TOKEN")
     pr_url = f"https://github.com/{repo}/pull/{number}"
     if not token and not preview:
@@ -181,12 +181,18 @@ def review_pr(repo, number, expected_head=None, preview=False, reviewer_login=No
         return
     head = pr["head"]["sha"]
     base = pr["base"]["sha"]
-    if expected_head and head != expected_head:
+    base_ref = pr["base"]["ref"]
+    if ((expected_head and head != expected_head) or
+            (expected_base_ref and base_ref != expected_base_ref)):
         print(f"Skipped outdated workflow run: {pr_url}")
         return
     marker = f"<!-- invoke-codex-pr-review:{base}:{head} -->"
     if not preview:
-        reviewer_login = reviewer_login or request_json("https://api.github.com/user", headers)["login"]
+        if not reviewer_login:
+            try:
+                reviewer_login = request_json("https://api.github.com/user", headers)["login"]
+            except (RuntimeError, KeyError) as error:
+                raise RuntimeError(f"Could not identify the GitHub reviewer. For an installation token, pass --reviewer-login: {error}") from None
         if has_review(endpoint, headers, marker, reviewer_login):
             print(f"An inline review by {reviewer_login} already exists for this PR revision: {pr_url}")
             return
@@ -206,9 +212,13 @@ def review_pr(repo, number, expected_head=None, preview=False, reviewer_login=No
     findings = ask_codex(context)
     comments = inline_comments(findings, anchors)
 
+    if comments and not preview and has_review(endpoint, headers, marker, reviewer_login):
+        print(f"An inline review by {reviewer_login} already exists for this PR revision: {pr_url}")
+        return
     current = request_json(endpoint, headers)
     if (current["state"] != "open" or current["draft"] or
-            current["head"]["sha"] != head or current["base"]["sha"] != base):
+            current["head"]["sha"] != head or current["base"]["sha"] != base or
+            current["base"]["ref"] != base_ref):
         raise RuntimeError(f"PR changed during review. Run again on its current revision: {pr_url}")
     if not findings:
         print(f"Codex found no actionable findings in the reviewed patches: {pr_url}")
@@ -220,9 +230,6 @@ def review_pr(repo, number, expected_head=None, preview=False, reviewer_login=No
     if preview:
         print(json.dumps(review))
         return
-    if has_review(endpoint, headers, marker, reviewer_login):
-        print(f"An inline review by {reviewer_login} already exists for this PR revision: {pr_url}")
-        return
     result = request_json(f"{endpoint}/reviews", headers, review)
     print(f"Posted {len(comments)} Codex inline comment(s): {result['html_url']}")
 
@@ -232,6 +239,7 @@ def main():
     parser.add_argument("repo", help="GitHub repository as OWNER/REPO")
     parser.add_argument("number", type=int, help="Pull request number")
     parser.add_argument("--expected-head", help="Skip if the PR has advanced from this commit")
+    parser.add_argument("--expected-base-ref", help="Skip if the PR no longer targets this branch")
     parser.add_argument("--preview", action="store_true", help="Print validated findings without posting them")
     parser.add_argument("--reviewer-login", help="Posting identity for a GitHub App installation token")
     args = parser.parse_args()
@@ -240,7 +248,11 @@ def main():
     if any(part in {".", ".."} for part in args.repo.split("/")):
         parser.error("Repository segments must be names")
     try:
-        review_pr(args.repo, args.number, args.expected_head, args.preview, args.reviewer_login)
+        review_pr(
+            args.repo, args.number, expected_head=args.expected_head,
+            expected_base_ref=args.expected_base_ref, preview=args.preview,
+            reviewer_login=args.reviewer_login,
+        )
     except (RuntimeError, KeyError, TypeError, ValueError, TimeoutError) as error:
         print(f"Review failed: {error}", file=sys.stderr)
         return 1
