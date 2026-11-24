@@ -8,7 +8,7 @@ from unittest.mock import patch
 
 SCRIPT = (
     Path(__file__).resolve().parents[1]
-    / "plugins/invoke-skills/skills/claude-pr-review/scripts/review_pr.py"
+    / "plugins/invoke-skills/skills/codex-pr-review/scripts/review_pr.py"
 )
 SPEC = importlib.util.spec_from_file_location("review_pr", SCRIPT)
 reviewer = importlib.util.module_from_spec(SPEC)
@@ -31,15 +31,6 @@ class ReviewTests(unittest.TestCase):
         self.updated_head = None
 
     def request(self, url, headers, payload=None):
-        if url == "https://api.anthropic.com/v1/messages":
-            self.assertNotIn("Authorization", headers)
-            self.assertIn("example.txt", payload["messages"][0]["content"])
-            self.assertEqual(payload["output_config"]["format"]["type"], "json_schema")
-            return {
-                "stop_reason": "end_turn",
-                "content": [{"type": "text", "text": json.dumps({"findings": self.findings})}],
-            }
-        self.assertNotIn("x-api-key", headers)
         if url.endswith("/files?per_page=100&page=1"):
             return [self.file]
         if url.endswith("/reviews?per_page=100&page=1"):
@@ -53,18 +44,29 @@ class ReviewTests(unittest.TestCase):
         self.pr_seen = True
         return pr
 
-    def run_review(self):
+    def run_review(self, preview=False):
         self.pr_seen = False
-        env = {"GH_TOKEN": "github-test-token", "ANTHROPIC_API_KEY": "anthropic-test-key"}
-        with patch.dict("os.environ", env, clear=True), patch.object(reviewer, "request_json", self.request):
-            with contextlib.redirect_stdout(io.StringIO()) as output:
-                reviewer.review_pr("owner/repo", 1)
+        env = {} if preview else {"GH_TOKEN": "github-test-token"}
+        with (
+            patch.dict("os.environ", env, clear=True),
+            patch.object(reviewer, "request_json", self.request),
+            patch.object(reviewer, "ask_codex", return_value=self.findings),
+            contextlib.redirect_stdout(io.StringIO()) as output,
+        ):
+            reviewer.review_pr("owner/repo", 1, preview=preview)
             return output.getvalue()
+
+    def test_preview_maps_inline_findings_without_auth_or_posting(self):
+        self.findings = [{"path": "example.txt", "line": 10, "side": "RIGHT", "body": "Fix the addition."}]
+        review = json.loads(self.run_review(preview=True))
+        self.assertEqual(review["commit_id"], self.pr["head"]["sha"])
+        self.assertEqual(review["comments"], self.findings)
+        self.assertEqual(self.published, [])
 
     def test_posts_valid_inline_findings_once_with_pinned_head(self):
         valid = {"path": "example.txt", "line": 10, "side": "LEFT", "body": "Fix the removal."}
         self.findings = [valid, valid.copy(), {**valid, "line": 9}]
-        self.assertIn("Posted 1 Claude inline comment", self.run_review())
+        self.assertIn("Posted 1 Codex inline comment", self.run_review())
         [review] = self.published
         self.assertEqual(review["commit_id"], self.pr["head"]["sha"])
         self.assertEqual(review["event"], "COMMENT")

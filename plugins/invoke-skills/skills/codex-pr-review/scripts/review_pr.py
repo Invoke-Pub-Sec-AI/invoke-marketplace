@@ -1,16 +1,17 @@
 #!/usr/bin/env python3
-"""Ask Claude to review a GitHub PR and publish validated inline findings."""
+"""Ask Codex to review a GitHub PR and publish validated inline findings."""
 
 import argparse
 import json
 import os
 import re
+import subprocess
 import sys
+import tempfile
 from pathlib import Path
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 
-MODEL = "claude-sonnet-4-6"
 MAX_FINDINGS = 5
 MAX_INPUT_BYTES = 300_000
 PROMPT = Path(__file__).resolve().parents[1] / "references" / "review-prompt.md"
@@ -83,7 +84,7 @@ def diff_context(files):
     return patches, anchors, omitted
 
 
-def ask_claude(context, api_key, model):
+def ask_codex(context):
     schema = {
         "type": "object",
         "properties": {
@@ -100,23 +101,36 @@ def ask_claude(context, api_key, model):
         "required": ["findings"],
         "additionalProperties": False,
     }
-    result = request_json(
-        "https://api.anthropic.com/v1/messages",
-        {"x-api-key": api_key, "anthropic-version": "2023-06-01"},
-        {
-            "model": model,
-            "max_tokens": 4096,
-            "system": PROMPT.read_text(encoding="utf-8"),
-            "messages": [{"role": "user", "content": context}],
-            "output_config": {"format": {"type": "json_schema", "schema": schema}},
-        },
-    )
-    if result.get("stop_reason") != "end_turn":
-        raise RuntimeError(f"Claude review did not complete ({result.get('stop_reason')})")
-    text = "".join(block["text"] for block in result["content"] if block["type"] == "text")
-    findings = json.loads(text)["findings"]
+    with tempfile.TemporaryDirectory(prefix="codex-pr-review-") as workspace:
+        schema_file = Path(workspace) / "schema.json"
+        schema_file.write_text(json.dumps(schema), encoding="utf-8")
+        output_file = Path(workspace) / "findings.json"
+        prompt = f"{PROMPT.read_text(encoding='utf-8')}\n\nPull request evidence (JSON):\n{context}"
+        env = {key: value for key, value in os.environ.items() if key not in {
+            "GH_TOKEN", "GITHUB_TOKEN", "GH_ENTERPRISE_TOKEN", "GITHUB_ENTERPRISE_TOKEN",
+        }}
+        try:
+            result = subprocess.run(
+                [
+                    "codex", "exec", "--ephemeral", "--ignore-user-config",
+                    "--skip-git-repo-check", "--sandbox", "read-only",
+                    "--disable", "shell_tool", "--disable", "hooks",
+                    "-c", 'web_search="disabled"', "--color", "never",
+                    "--output-schema", str(schema_file),
+                    "--output-last-message", str(output_file), "-",
+                ],
+                input=prompt, text=True, cwd=workspace, env=env,
+                capture_output=True, timeout=300, check=False,
+            )
+        except FileNotFoundError:
+            raise RuntimeError("Install and authenticate the Codex CLI to review this PR") from None
+        except subprocess.TimeoutExpired:
+            raise RuntimeError("Codex exceeded the five-minute review timeout") from None
+        if result.returncode != 0 or not output_file.is_file():
+            raise RuntimeError(f"Codex did not complete the review (exit {result.returncode}); check Codex CLI authentication and availability")
+        findings = json.loads(output_file.read_text(encoding="utf-8"))["findings"]
     if not isinstance(findings, list):
-        raise RuntimeError("Claude returned an invalid findings list")
+        raise RuntimeError("Codex returned an invalid findings list")
     return findings
 
 
@@ -140,23 +154,18 @@ def inline_comments(findings, anchors):
     return comments
 
 
-def review_pr(repo, number, expected_head=None):
+def review_pr(repo, number, expected_head=None, preview=False):
     token = os.getenv("GH_TOKEN") or os.getenv("GITHUB_TOKEN")
-    api_key = os.getenv("ANTHROPIC_API_KEY")
     pr_url = f"https://github.com/{repo}/pull/{number}"
-    missing = []
-    if not api_key:
-        missing.append("ANTHROPIC_API_KEY")
-    if not token:
-        missing.append("GH_TOKEN or GITHUB_TOKEN")
-    if missing:
-        raise RuntimeError(f"{pr_url}: missing {' and '.join(missing)}")
+    if not token and not preview:
+        raise RuntimeError(f"{pr_url}: set GH_TOKEN or GITHUB_TOKEN, or use --preview")
 
     headers = {
-        "Authorization": f"Bearer {token}",
         "Accept": "application/vnd.github+json",
         "X-GitHub-Api-Version": "2026-03-10",
     }
+    if token:
+        headers["Authorization"] = f"Bearer {token}"
     endpoint = f"https://api.github.com/repos/{repo}/pulls/{number}"
     pr = request_json(endpoint, headers)
     if pr["state"] != "open" or pr["draft"]:
@@ -167,8 +176,8 @@ def review_pr(repo, number, expected_head=None):
     if expected_head and head != expected_head:
         print(f"Skipped outdated workflow run: {pr_url}")
         return
-    marker = f"<!-- invoke-claude-pr-review:{base}:{head} -->"
-    if any(marker in (review["body"] or "") for review in github_pages(f"{endpoint}/reviews", headers)):
+    marker = f"<!-- invoke-codex-pr-review:{base}:{head} -->"
+    if not preview and any(marker in (review["body"] or "") for review in github_pages(f"{endpoint}/reviews", headers)):
         print(f"An inline review already exists for this PR revision: {pr_url}")
         return
 
@@ -184,7 +193,7 @@ def review_pr(repo, number, expected_head=None):
     context = json.dumps({"title": pr["title"], "description": pr["body"], "patches": patches})
     if len(context.encode("utf-8")) > MAX_INPUT_BYTES:
         raise RuntimeError(f"PR exceeds the {MAX_INPUT_BYTES:,}-byte review input limit: {pr_url}")
-    findings = ask_claude(context, api_key, os.getenv("CLAUDE_REVIEW_MODEL") or MODEL)
+    findings = ask_codex(context)
     comments = inline_comments(findings, anchors)
 
     current = request_json(endpoint, headers)
@@ -192,19 +201,20 @@ def review_pr(repo, number, expected_head=None):
             current["head"]["sha"] != head or current["base"]["sha"] != base):
         raise RuntimeError(f"PR changed during review. Run again on its current revision: {pr_url}")
     if not findings:
-        print(f"Claude found no actionable findings in the reviewed patches: {pr_url}")
+        print(f"Codex found no actionable findings in the reviewed patches: {pr_url}")
         return
     if not comments:
-        raise RuntimeError(f"Claude returned findings, but none passed inline comment validation: {pr_url}")
+        raise RuntimeError(f"Codex returned findings, but none passed inline comment validation: {pr_url}")
 
-    if any(marker in (review["body"] or "") for review in github_pages(f"{endpoint}/reviews", headers)):
+    review = {"commit_id": head, "event": "COMMENT", "body": f"Codex PR review\n\n{marker}", "comments": comments}
+    if preview:
+        print(json.dumps(review))
+        return
+    if any(marker in (existing["body"] or "") for existing in github_pages(f"{endpoint}/reviews", headers)):
         print(f"An inline review already exists for this PR revision: {pr_url}")
         return
-    result = request_json(
-        f"{endpoint}/reviews", headers,
-        {"commit_id": head, "event": "COMMENT", "body": f"Claude PR review\n\n{marker}", "comments": comments},
-    )
-    print(f"Posted {len(comments)} Claude inline comment(s): {result['html_url']}")
+    result = request_json(f"{endpoint}/reviews", headers, review)
+    print(f"Posted {len(comments)} Codex inline comment(s): {result['html_url']}")
 
 
 def main():
@@ -212,13 +222,14 @@ def main():
     parser.add_argument("repo", help="GitHub repository as OWNER/REPO")
     parser.add_argument("number", type=int, help="Pull request number")
     parser.add_argument("--expected-head", help="Skip if the PR has advanced from this commit")
+    parser.add_argument("--preview", action="store_true", help="Print validated findings without posting them")
     args = parser.parse_args()
     if not re.fullmatch(r"[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+", args.repo) or args.number < 1:
         parser.error("Expected OWNER/REPO and a positive pull request number")
     if any(part in {".", ".."} for part in args.repo.split("/")):
         parser.error("Repository segments must be names")
     try:
-        review_pr(args.repo, args.number, args.expected_head)
+        review_pr(args.repo, args.number, args.expected_head, args.preview)
     except (RuntimeError, KeyError, TypeError, ValueError, TimeoutError) as error:
         print(f"Review failed: {error}", file=sys.stderr)
         return 1

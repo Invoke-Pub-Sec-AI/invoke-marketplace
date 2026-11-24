@@ -29,25 +29,22 @@ to the package path relative to the repository root, starting with `./`.
 See [OpenAI's plugin packaging guide](https://developers.openai.com/plugins/build/plugins)
 for the manifest and marketplace formats.
 
-## Review a PR with Claude
+## Review a PR with Codex
 
-In Codex, ask `@Invoke Skills` to use `claude-pr-review` on a GitHub PR URL.
-The local skill needs `ANTHROPIC_API_KEY` and an authenticated `GH_TOKEN`
-or `GITHUB_TOKEN` with pull request write access.
+In Codex, ask `@Invoke Skills` to use `codex-pr-review` on a GitHub PR URL.
+The skill uses your signed-in Codex CLI. It can post inline findings through a
+connected GitHub tool or directly with `GH_TOKEN` or `GITHUB_TOKEN` that has
+pull request write access. Use `--preview` for a review without posting.
 
-The [GitHub Actions hook](.github/workflows/claude-pr-review.yml) runs the same
+The [GitHub Actions hook](.github/workflows/codex-pr-review.yml) runs the same
 reviewer on new and updated non-draft PRs from branches in this repository.
-Add `ANTHROPIC_API_KEY` to the repository's Actions secrets to enable Claude.
-For existing PRs, use the skill locally or rerun the review job in GitHub
-Actions. Each run sends the PR title, description, and complete textual
-patches to Anthropic. GitHub receives inline comments only for findings that
-resolve to changed lines. The workflow log reports skipped patches and
-whether the reviewer found anything.
+Add `OPENAI_API_KEY` to the repository's Actions secrets to enable CI reviews.
+For an existing PR, use the skill locally or rerun its review job. Each run
+sends the PR title, description, and complete textual patches to Codex. GitHub
+receives inline comments only for findings that resolve to changed lines.
 
-The [review prompt](plugins/invoke-skills/skills/claude-pr-review/references/review-prompt.md)
-adapts Anthropic's guidance on checking evidence, filtering false positives,
-and anchoring actionable feedback to the diff. The runner uses Claude's
-structured output to validate those anchors before posting.
-[Anthropic's code-review workflow](https://github.com/anthropics/claude-plugins-official/blob/main/plugins/code-review/commands/code-review.md)
-· [Claude prompting guide](https://platform.claude.com/docs/en/build-with-claude/prompt-engineering/overview)
-· [Claude structured outputs](https://platform.claude.com/docs/en/build-with-claude/structured-outputs)
+The [review prompt](plugins/invoke-skills/skills/codex-pr-review/references/review-prompt.md)
+asks Codex to verify a concrete regression and its impact before reporting it.
+The runner uses structured output and validates diff anchors before posting.
+[Codex review guidance](https://developers.openai.com/blog/custom-code-review-rules-for-codex)
+· [Structured reviews with Codex](https://developers.openai.com/cookbook/examples/codex/build_iterative_repair_loops_with_codex)

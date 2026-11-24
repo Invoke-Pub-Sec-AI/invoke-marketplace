@@ -1,4 +1,4 @@
-name: Claude PR review
+name: Codex PR review
 
 on:
   pull_request:
@@ -9,7 +9,7 @@ permissions:
   pull-requests: write
 
 concurrency:
-  group: claude-pr-review-${{ github.event.pull_request.number }}
+  group: codex-pr-review-${{ github.event.pull_request.number }}
   cancel-in-progress: true
 
 jobs:
@@ -19,17 +19,23 @@ jobs:
       github.event.pull_request.head.repo.full_name == github.repository &&
       github.event.pull_request.user.login != 'dependabot[bot]'
     runs-on: ubuntu-latest
-    timeout-minutes: 8
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
           persist-credentials: false
+      - name: Install Codex CLI
+        run: npm install --global @openai/codex@0.171.0
       - name: Review pull request
         env:
-          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          CODEX_API_KEY: ${{ secrets.OPENAI_API_KEY }}
           GITHUB_TOKEN: ${{ github.token }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
           PR_HEAD: ${{ github.event.pull_request.head.sha }}
         run: |
-          python3 plugins/invoke-skills/skills/claude-pr-review/scripts/review_pr.py \
+          if [ -z "$CODEX_API_KEY" ]; then
+            echo "::error::Set the OPENAI_API_KEY Actions secret to run Codex."
+            exit 1
+          fi
+          python3 plugins/invoke-skills/skills/codex-pr-review/scripts/review_pr.py \
             "$GITHUB_REPOSITORY" "$PR_NUMBER" --expected-head "$PR_HEAD"
