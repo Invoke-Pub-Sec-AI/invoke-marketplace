@@ -1,10 +1,11 @@
 # Invoke Marketplace
 
-Local Codex project skills for Agentic Auditor (AA).
+Local Codex project skills for Agentic Auditor (AA) and Air University (AU).
 
 | Start with | Use it for |
 | --- | --- |
 | [AA project](plugins/invoke-skills/skills/aa-project/SKILL.md) | Find the right checkout for PBC evidence, Lab questions, research-worker operations, or an SME review package. The skill also identifies which worker versions support the six specialist AA workflows. |
+| [AU project](plugins/invoke-skills/skills/au-project/SKILL.md) | Find the source for a project claim, review a proposed metadata mapping, change the learning workspace, or trace one of the three transcript automations. |
 | [Summarize a pull request](plugins/invoke-skills/skills/summarize-pull-request/SKILL.md) | Explain a PR or a local branch diff, including what changed and what was verified. |
 | [Marketplace maintenance](plugins/invoke-skills/skills/invoke-marketplace/SKILL.md) | Add or update a skill or plugin in this catalog. |
 
