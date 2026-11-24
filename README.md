@@ -18,6 +18,19 @@ from the repository root:
 codex plugin marketplace add .
 ```
 
+## Pick up new skills
+
+Invoke Skills discovers workflows from its `skills/` directory. New skills in
+that directory use the existing Invoke Skills marketplace entry.
+
+If you installed from a local checkout, pull the latest changes and restart
+the ChatGPT desktop app. If the skill still doesn't appear, reinstall
+**Invoke Skills** from **Invoke Marketplace** and start a new chat.
+
+If you registered the Git repository as a marketplace source, run
+`codex plugin marketplace upgrade invoke-marketplace` to refresh its snapshot.
+Then open a new Codex chat to use the updated plugin.
+
 ## Add a skill or plugin
 
 To extend **Invoke Skills**, add a folder under `plugins/invoke-skills/skills/`
