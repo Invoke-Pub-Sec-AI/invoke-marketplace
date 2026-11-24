@@ -20,6 +20,9 @@ The runner uses the installed Codex CLI and its saved sign-in. To publish
 directly, provide `GH_TOKEN` or `GITHUB_TOKEN` with pull request write access.
 For a GitHub App installation token, also pass `--reviewer-login` with the
 app's bot login.
+Direct publishing uses a lock in the user's cache directory. If that directory
+is read-only, set `INVOKE_CODEX_REVIEW_LOCK_DIR` to a writable, private absolute
+directory. Use the same directory for every local review run.
 If a connected GitHub tool can write reviews but the shell lacks a token, run
 with `--preview`. For private PRs, the preview still needs GitHub read access.
 When the preview returns findings, verify they are actionable and the PR head

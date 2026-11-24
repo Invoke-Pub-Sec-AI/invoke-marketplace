@@ -60,6 +60,12 @@ def has_review(endpoint, headers, marker, login):
 
 
 def publish_lock_directory():
+    configured = os.getenv("INVOKE_CODEX_REVIEW_LOCK_DIR")
+    if configured:
+        directory = Path(configured)
+        if not directory.is_absolute():
+            raise RuntimeError("INVOKE_CODEX_REVIEW_LOCK_DIR must be an absolute path")
+        return directory
     return Path.home() / ".cache" / "invoke-codex-pr-review"
 
 
@@ -68,7 +74,13 @@ def publish_lock(repo, number, login):
     """Serialize review writes by the same local user and GitHub reviewer."""
     key = f"{repo.casefold()}:{number}:{login.casefold()}".encode()
     directory = publish_lock_directory()
-    directory.mkdir(mode=0o700, parents=True, exist_ok=True)
+    try:
+        directory.mkdir(mode=0o700, parents=True, exist_ok=True)
+    except PermissionError:
+        raise RuntimeError(
+            "Cannot create the review lock directory. Set INVOKE_CODEX_REVIEW_LOCK_DIR to a "
+            "writable, private absolute path and use the same path for every local review"
+        ) from None
     if os.name != "nt" and (directory.is_symlink() or directory.stat().st_uid != os.getuid()):
         raise RuntimeError("The local review lock directory is not owned by the current user")
     # Keep the file in place so waiters and new calls always lock the same file.

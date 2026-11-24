@@ -174,5 +174,19 @@ class ReviewTests(unittest.TestCase):
         self.assertEqual(reviewer.changed_lines(diff), {("LEFT", 1), ("RIGHT", 1), ("RIGHT", 9)})
 
 
+class LockDirectoryTests(unittest.TestCase):
+    def test_runs_can_share_a_writable_directory_outside_the_home(self):
+        with tempfile.TemporaryDirectory() as directory:
+            with patch.dict("os.environ", {"INVOKE_CODEX_REVIEW_LOCK_DIR": directory}):
+                self.assertEqual(reviewer.publish_lock_directory(), Path(directory))
+                with reviewer.publish_lock("owner/repo", 1, "reviewer"):
+                    self.assertEqual(len(list(Path(directory).iterdir())), 1)
+
+    def test_rejects_relative_lock_directory_that_could_vary_by_checkout(self):
+        with patch.dict("os.environ", {"INVOKE_CODEX_REVIEW_LOCK_DIR": "locks"}):
+            with self.assertRaisesRegex(RuntimeError, "must be an absolute path"):
+                reviewer.publish_lock_directory()
+
+
 if __name__ == "__main__":
     unittest.main()
