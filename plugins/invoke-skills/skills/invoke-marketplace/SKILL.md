@@ -1,6 +1,6 @@
 ---
 name: invoke-marketplace
-description: Add, update, or remove skill packages in the Invoke Marketplace repository. Use when editing its plugin catalog or adding a workflow to Invoke Skills.
+description: Add, update, or remove skill packages in the Invoke Marketplace repository. Use when editing its plugin catalog or adding a workflow to a plugin.
 ---
 
 # Invoke Marketplace
@@ -9,10 +9,12 @@ Find the marketplace repository and read `.agents/plugins/marketplace.json`.
 It should have the name `invoke-marketplace`. Use the repository root to
 resolve each catalog entry's relative source path.
 
-- For a new Invoke Skills workflow, create
-  `plugins/invoke-skills/skills/<skill-name>/SKILL.md`. Give it YAML frontmatter
+- For a new workflow, use `invoke-git-workflows` for Git and PR tasks or
+  `invoke-skills` for marketplace maintenance. Create
+  `plugins/<plugin-name>/skills/<skill-name>/SKILL.md`. Give it YAML frontmatter
   with a `name` that matches the directory and a `description` that says when to
-  use the workflow. The existing Invoke Skills catalog entry covers new skills.
+  use the workflow. Keep related skills and references in the same package.
+  Each package has its own catalog entry and appears as a separate Codex option.
 - For a separate plugin, put its package in `plugins/<plugin-name>/`. Use a
   portable root `plugin.json` with the Agent Plugins schema for new packages.
   Add one catalog entry with the manifest's name, a local source path beginning

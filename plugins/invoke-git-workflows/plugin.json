@@ -1,0 +1,15 @@
+{
+  "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
+  "name": "invoke-git-workflows",
+  "version": "0.1.0",
+  "description": "Review GitHub pull requests with Codex and summarize pull requests or local branch changes.",
+  "extensions": {
+    "com.openai": {
+      "interface": {
+        "displayName": "Git Workflows",
+        "shortDescription": "Review and summarize PRs",
+        "category": "Developer Tools"
+      }
+    }
+  }
+}
