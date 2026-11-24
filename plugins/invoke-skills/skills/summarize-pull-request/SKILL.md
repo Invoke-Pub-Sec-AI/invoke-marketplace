@@ -5,9 +5,10 @@ description: Summarize a pull request when given its URL, number, or diff, or wh
 
 # Summarize a Pull Request
 
-Identify the PR or branch the user means. For a PR, read its description and
-changed files or diff using the connected repository provider or supplied
-materials. Check linked context when it explains why the change exists.
+Identify the PR or branch the user means. For a GitHub PR, use `gh pr view`
+for its description and base, and `gh pr diff` for the changes. Use supplied
+PR materials or local Git refs for a local-only review. Check linked context
+when it explains why the change exists.
 For a local branch, determine the intended base and compare it to the branch
 head from their merge base, for example with `git diff <base>...HEAD`.
 If the target or base is still ambiguous after checking available context,

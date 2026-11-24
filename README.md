@@ -1,13 +1,16 @@
 # Invoke Marketplace
 
-Local Codex project skills for Agentic Auditor (AA) and Air University (AU).
+Local Codex skills for Agentic Auditor (AA), Air University (AU), and the Git workflows used across both projects.
 
 | Start with | Use it for |
 | --- | --- |
 | [AA project](plugins/invoke-skills/skills/aa-project/SKILL.md) | Find the right checkout for PBC evidence, Lab questions, research-worker operations, or an SME review package. The skill also identifies which worker versions support the six specialist AA workflows. |
 | [AU project](plugins/invoke-skills/skills/au-project/SKILL.md) | Find the source for a project claim, review a proposed metadata mapping, change the learning workspace, or trace one of the three transcript automations. |
+| [Git workflow](plugins/invoke-skills/skills/git-workflow/SKILL.md) | Start a feature branch, organize changes into small commits, and prepare a focused pull request. |
 | [Summarize a pull request](plugins/invoke-skills/skills/summarize-pull-request/SKILL.md) | Explain a PR or a local branch diff, including what changed and what was verified. |
 | [Marketplace maintenance](plugins/invoke-skills/skills/invoke-marketplace/SKILL.md) | Add or update a skill or plugin in this catalog. |
+
+The optional **Git and GitHub Preferences** package uses `git` and `gh` for feature branches, focused commits, and pull requests. Install it separately from **Invoke Skills**.
 
 ## Install from this checkout
 
@@ -18,6 +21,8 @@ To use this checkout across projects, register it locally and install the desire
 ```sh
 codex plugin marketplace add .
 codex plugin add invoke-skills@invoke-marketplace
+# Optional Git and GitHub CLI preferences
+codex plugin add invoke-coding-preferences@invoke-marketplace
 ```
 
 ## Add a skill or plugin
