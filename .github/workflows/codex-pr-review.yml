@@ -41,6 +41,6 @@ jobs:
             echo "::error::Set the OPENAI_API_KEY Actions secret to run Codex."
             exit 1
           fi
-          python3 plugins/invoke-skills/skills/codex-pr-review/scripts/review_pr.py \
+          python3 plugins/invoke-git-workflows/skills/codex-pr-review/scripts/review_pr.py \
             "$GITHUB_REPOSITORY" "$PR_NUMBER" --expected-head "$PR_HEAD" \
             --expected-base-ref "$PR_BASE_REF" --reviewer-login 'github-actions[bot]'

@@ -8,7 +8,7 @@ from unittest.mock import patch
 
 SCRIPT = (
     Path(__file__).resolve().parents[1]
-    / "plugins/invoke-skills/skills/codex-pr-review/scripts/review_pr.py"
+    / "plugins/invoke-git-workflows/skills/codex-pr-review/scripts/review_pr.py"
 )
 SPEC = importlib.util.spec_from_file_location("review_pr", SCRIPT)
 reviewer = importlib.util.module_from_spec(SPEC)
