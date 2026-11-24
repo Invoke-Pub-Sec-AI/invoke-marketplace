@@ -28,3 +28,27 @@ For a separate plugin, place the package under `plugins/<name>/` and add an entr
 to the package path relative to the repository root, starting with `./`.
 See [OpenAI's plugin packaging guide](https://developers.openai.com/plugins/build/plugins)
 for the manifest and marketplace formats.
+
+## Review a PR with Codex
+
+In Codex, ask `@Invoke Skills` to use `codex-pr-review` on a GitHub PR URL.
+The skill uses your signed-in Codex CLI. It can post inline findings through a
+connected GitHub tool or directly with `GH_TOKEN` or `GITHUB_TOKEN` that has
+pull request write access. For GitHub App installation tokens, pass the
+app's bot login with `--reviewer-login`. Use `--preview` for a review without
+posting.
+
+The [GitHub Actions hook](.github/workflows/codex-pr-review.yml) runs the same
+reviewer on new and updated non-draft PRs targeting the default branch from
+branches in this repository. It runs the reviewer from the trusted base
+revision. The hook must be on the default branch and the repository must have
+an `OPENAI_API_KEY` Actions secret.
+For an existing PR, use the skill locally or rerun its review job. Each run
+sends the PR title, description, and complete textual patches to Codex. GitHub
+receives inline comments only for findings that resolve to changed lines.
+
+The [review prompt](plugins/invoke-skills/skills/codex-pr-review/references/review-prompt.md)
+asks Codex to verify a concrete regression and its impact before reporting it.
+The runner uses structured output and validates diff anchors before posting.
+[Codex review guidance](https://developers.openai.com/blog/custom-code-review-rules-for-codex)
+· [Structured reviews with Codex](https://developers.openai.com/cookbook/examples/codex/build_iterative_repair_loops_with_codex)
