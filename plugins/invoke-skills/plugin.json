@@ -1,13 +1,13 @@
 {
   "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
   "name": "invoke-skills",
-  "version": "0.1.2",
-  "description": "Custom workflows for maintaining Invoke Marketplace.",
+  "version": "0.2.0",
+  "description": "Custom workflows for Invoke Marketplace and GitHub pull requests.",
   "extensions": {
     "com.openai": {
       "interface": {
         "displayName": "Invoke Skills",
-        "shortDescription": "Maintain the Invoke Marketplace catalog",
+        "shortDescription": "Maintain the marketplace and review pull requests",
         "category": "Developer Tools"
       }
     }
