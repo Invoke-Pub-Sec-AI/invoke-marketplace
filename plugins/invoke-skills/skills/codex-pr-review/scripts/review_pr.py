@@ -60,9 +60,7 @@ def has_review(endpoint, headers, marker, login):
 
 
 def publish_lock_directory():
-    if os.name == "nt":
-        return Path.home() / ".cache" / "invoke-codex-pr-review"
-    return Path("/tmp") / f"invoke-codex-pr-review-{os.getuid()}"
+    return Path.home() / ".cache" / "invoke-codex-pr-review"
 
 
 @contextmanager
