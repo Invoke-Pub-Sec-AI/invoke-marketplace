@@ -3,6 +3,7 @@ import errno
 import importlib.util
 import io
 import json
+import os
 import sys
 import tempfile
 import threading
@@ -186,6 +187,15 @@ class LockDirectoryTests(unittest.TestCase):
         with patch.dict("os.environ", {"INVOKE_CODEX_REVIEW_LOCK_DIR": "locks"}):
             with self.assertRaisesRegex(RuntimeError, "must be an absolute path"):
                 reviewer.publish_lock_directory()
+
+    @unittest.skipIf(os.name == "nt", "POSIX directory permissions")
+    def test_rejects_group_writable_lock_directory(self):
+        with tempfile.TemporaryDirectory() as directory:
+            os.chmod(directory, 0o770)
+            with patch.dict("os.environ", {"INVOKE_CODEX_REVIEW_LOCK_DIR": directory}):
+                with self.assertRaisesRegex(RuntimeError, "must be private"):
+                    with reviewer.publish_lock("owner/repo", 1, "reviewer"):
+                        pass
 
 
 if __name__ == "__main__":

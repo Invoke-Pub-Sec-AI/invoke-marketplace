@@ -81,8 +81,10 @@ def publish_lock(repo, number, login):
             "Cannot create the review lock directory. Set INVOKE_CODEX_REVIEW_LOCK_DIR to a "
             "writable, private absolute path and use the same path for every local review"
         ) from None
-    if os.name != "nt" and (directory.is_symlink() or directory.stat().st_uid != os.getuid()):
-        raise RuntimeError("The local review lock directory is not owned by the current user")
+    if os.name != "nt":
+        info = directory.lstat()
+        if directory.is_symlink() or info.st_uid != os.getuid() or info.st_mode & 0o022:
+            raise RuntimeError("The local review lock directory must be private and owned by the current user")
     # Keep the file in place so waiters and new calls always lock the same file.
     with (directory / hashlib.sha256(key).hexdigest()).open("a+b") as lock:
         if os.name == "nt":
