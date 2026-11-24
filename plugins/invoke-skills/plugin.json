@@ -1,13 +1,13 @@
 {
   "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
   "name": "invoke-skills",
-  "version": "0.1.2",
-  "description": "Custom workflows for maintaining Invoke Marketplace.",
+  "version": "0.1.3",
+  "description": "Project guidance for Agentic Auditor, pull request summaries, and marketplace maintenance.",
   "extensions": {
     "com.openai": {
       "interface": {
         "displayName": "Invoke Skills",
-        "shortDescription": "Maintain the Invoke Marketplace catalog",
+        "shortDescription": "Project skills for Agentic Auditor",
         "category": "Developer Tools"
       }
     }

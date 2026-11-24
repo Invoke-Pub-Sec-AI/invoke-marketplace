@@ -1,27 +1,28 @@
 # Invoke Marketplace
 
-A repo-scoped Codex marketplace for our own skills. **Invoke Skills** includes
-[the Invoke Marketplace skill](plugins/invoke-skills/skills/invoke-marketplace/SKILL.md),
-a skill for adding and updating packages in this catalog.
+Local Codex project skills for Agentic Auditor (AA).
 
-## Install and use Invoke Skills
+| Start with | Use it for |
+| --- | --- |
+| [AA project](plugins/invoke-skills/skills/aa-project/SKILL.md) | Find the right checkout for PBC evidence, Lab questions, research-worker operations, or an SME review package. The skill also identifies which worker versions support the six specialist AA workflows. |
+| [Summarize a pull request](plugins/invoke-skills/skills/summarize-pull-request/SKILL.md) | Explain a PR or a local branch diff, including what changed and what was verified. |
+| [Marketplace maintenance](plugins/invoke-skills/skills/invoke-marketplace/SKILL.md) | Add or update a skill or plugin in this catalog. |
 
-Open this repository in the ChatGPT desktop app. Restart the app to discover
-the marketplace, then open **Plugins**, select **Invoke Marketplace**, and
-install **Invoke Skills**. Start a new chat in this project, select
-`@Invoke Skills`, and ask it to use `invoke-marketplace`.
+## Install from this checkout
 
-To make the marketplace available outside this repository, run this command
-from the repository root:
+Open the repository in the desktop app. Restart the app to discover the marketplace, then choose **Plugins → Invoke Marketplace → Invoke Skills**. Start a new chat and ask, for example, “Use `aa-project` to trace a returned SME review package.”
+
+To use this checkout across projects, register it locally and install the desired package.
 
 ```sh
 codex plugin marketplace add .
+codex plugin add invoke-skills@invoke-marketplace
 ```
 
 ## Add a skill or plugin
 
 To extend **Invoke Skills**, add a folder under `plugins/invoke-skills/skills/`
-with a `SKILL.md` whose `name` matches the folder.
+with a `SKILL.md` whose `name` matches the folder. Bump the plugin version when updating released skills.
 
 For a separate plugin, place the package under `plugins/<name>/` and add an entry to
 [the marketplace catalog](.agents/plugins/marketplace.json). Set `source.path`
