@@ -29,7 +29,8 @@ the ChatGPT desktop app. If the skill still doesn't appear, reinstall
 
 If you registered the Git repository as a marketplace source, run
 `codex plugin marketplace upgrade invoke-marketplace` to refresh its snapshot.
-Then open a new Codex chat to use the updated plugin.
+Reinstall **Invoke Skills** from the refreshed marketplace, then start a new
+Codex chat.
 
 ## Add a skill or plugin
 
