@@ -1,13 +1,15 @@
 import contextlib
+import errno
 import importlib.util
 import io
 import json
+import sys
 import tempfile
 import threading
 import unittest
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 SCRIPT = (
     Path(__file__).resolve().parents[1]
@@ -33,9 +35,9 @@ class ReviewTests(unittest.TestCase):
         self.files = [self.file]
         lock_dir = tempfile.TemporaryDirectory()
         self.addCleanup(lock_dir.cleanup)
-        tempdir_patch = patch.object(reviewer.tempfile, "gettempdir", return_value=lock_dir.name)
-        tempdir_patch.start()
-        self.addCleanup(tempdir_patch.stop)
+        lock_patch = patch.object(reviewer, "publish_lock_directory", return_value=Path(lock_dir.name))
+        lock_patch.start()
+        self.addCleanup(lock_patch.stop)
         self.published = []
         self.findings = []
         self.updated_head = None
@@ -158,6 +160,14 @@ class ReviewTests(unittest.TestCase):
                 self.assertFalse(acquired.wait(0.1))
             future.result(timeout=2)
         self.assertTrue(acquired.is_set())
+
+    def test_windows_lock_retries_contention(self):
+        windows = Mock(LK_NBLCK=2)
+        windows.locking.side_effect = [OSError(errno.EACCES, "locked"), None]
+        file = Mock()
+        with patch.dict(sys.modules, {"msvcrt": windows}), patch.object(reviewer.time, "sleep"):
+            reviewer.wait_for_windows_lock(file)
+        self.assertEqual(windows.locking.call_count, 2)
 
     def test_parses_multiple_hunks_without_counting_diff_markers(self):
         diff = "@@ -1 +1 @@\n-old\n+new\n\\ No newline at end of file\n@@ -8,0 +9 @@\n+tail"

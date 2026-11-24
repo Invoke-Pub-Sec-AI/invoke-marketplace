@@ -2,6 +2,7 @@
 """Ask Codex to review a GitHub PR and publish validated inline findings."""
 
 import argparse
+import errno
 import hashlib
 import json
 import os
@@ -9,6 +10,7 @@ import re
 import subprocess
 import sys
 import tempfile
+import time
 from contextlib import contextmanager, nullcontext
 from pathlib import Path
 from urllib.error import HTTPError, URLError
@@ -57,25 +59,46 @@ def has_review(endpoint, headers, marker, login):
     )
 
 
+def publish_lock_directory():
+    if os.name == "nt":
+        return Path.home() / ".cache" / "invoke-codex-pr-review"
+    return Path("/tmp") / f"invoke-codex-pr-review-{os.getuid()}"
+
+
 @contextmanager
 def publish_lock(repo, number, login):
     """Serialize review writes by the same local user and GitHub reviewer."""
     key = f"{repo.casefold()}:{number}:{login.casefold()}".encode()
-    user_key = hashlib.sha256(os.fsencode(Path.home())).hexdigest()[:16]
-    directory = Path(tempfile.gettempdir()) / f"invoke-codex-pr-review-{user_key}"
+    directory = publish_lock_directory()
     directory.mkdir(mode=0o700, parents=True, exist_ok=True)
+    if os.name != "nt" and (directory.is_symlink() or directory.stat().st_uid != os.getuid()):
+        raise RuntimeError("The local review lock directory is not owned by the current user")
     # Keep the file in place so waiters and new calls always lock the same file.
     with (directory / hashlib.sha256(key).hexdigest()).open("a+b") as lock:
         if os.name == "nt":
-            import msvcrt
-
-            lock.seek(0)
-            msvcrt.locking(lock.fileno(), msvcrt.LK_LOCK, 1)
+            wait_for_windows_lock(lock)
         else:
             import fcntl
 
             fcntl.flock(lock.fileno(), fcntl.LOCK_EX)
         yield
+
+
+def wait_for_windows_lock(lock):
+    import msvcrt
+
+    deadline = time.monotonic() + 300
+    while True:
+        try:
+            lock.seek(0)
+            msvcrt.locking(lock.fileno(), msvcrt.LK_NBLCK, 1)
+            return
+        except OSError as error:
+            if error.errno not in {errno.EACCES, errno.EAGAIN}:
+                raise
+            if time.monotonic() >= deadline:
+                raise RuntimeError("Timed out waiting for another local review to finish publishing") from error
+            time.sleep(0.25)
 
 
 def changed_lines(patch):
