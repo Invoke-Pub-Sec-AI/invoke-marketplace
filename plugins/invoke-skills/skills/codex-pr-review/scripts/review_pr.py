@@ -2,12 +2,14 @@
 """Ask Codex to review a GitHub PR and publish validated inline findings."""
 
 import argparse
+import hashlib
 import json
 import os
 import re
 import subprocess
 import sys
 import tempfile
+from contextlib import contextmanager, nullcontext
 from pathlib import Path
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
@@ -55,6 +57,27 @@ def has_review(endpoint, headers, marker, login):
     )
 
 
+@contextmanager
+def publish_lock(repo, number, login):
+    """Serialize review writes by the same local user and GitHub reviewer."""
+    key = f"{repo.casefold()}:{number}:{login.casefold()}".encode()
+    user_key = hashlib.sha256(os.fsencode(Path.home())).hexdigest()[:16]
+    directory = Path(tempfile.gettempdir()) / f"invoke-codex-pr-review-{user_key}"
+    directory.mkdir(mode=0o700, parents=True, exist_ok=True)
+    # Keep the file in place so waiters and new calls always lock the same file.
+    with (directory / hashlib.sha256(key).hexdigest()).open("a+b") as lock:
+        if os.name == "nt":
+            import msvcrt
+
+            lock.seek(0)
+            msvcrt.locking(lock.fileno(), msvcrt.LK_LOCK, 1)
+        else:
+            import fcntl
+
+            fcntl.flock(lock.fileno(), fcntl.LOCK_EX)
+        yield
+
+
 def changed_lines(patch):
     anchors = set()
     old_line = new_line = None
@@ -84,8 +107,7 @@ def diff_context(files):
         patch = file.get("patch")
         changed = changed_lines(patch) if patch else set()
         if not changed or len(changed) != file["additions"] + file["deletions"]:
-            if file["changes"]:
-                omitted.append(path)
+            omitted.append(path)
             continue
         anchors[path] = changed
         patches.append({"path": path, "patch": patch})
@@ -202,7 +224,8 @@ def review_pr(repo, number, *, expected_head=None, expected_base_ref=None, previ
         raise RuntimeError(f"GitHub returned an incomplete changed-file list: {pr_url}")
     patches, anchors, omitted = diff_context(files)
     if omitted:
-        print(f"Omitted {len(omitted)} file(s) with missing or incomplete patches.")
+        print(f"Files omitted from inline review for missing or incomplete patches: {json.dumps(omitted)}",
+              file=sys.stderr)
     if not patches:
         print(f"Skipped PR with no complete textual patches: {pr_url}")
         return
@@ -212,26 +235,29 @@ def review_pr(repo, number, *, expected_head=None, expected_base_ref=None, previ
     findings = ask_codex(context)
     comments = inline_comments(findings, anchors)
 
-    if comments and not preview and has_review(endpoint, headers, marker, reviewer_login):
-        print(f"An inline review by {reviewer_login} already exists for this PR revision: {pr_url}")
-        return
-    current = request_json(endpoint, headers)
-    if (current["state"] != "open" or current["draft"] or
-            current["head"]["sha"] != head or current["base"]["sha"] != base or
-            current["base"]["ref"] != base_ref):
-        raise RuntimeError(f"PR changed during review. Run again on its current revision: {pr_url}")
-    if not findings:
-        print(f"Codex found no actionable findings in the reviewed patches: {pr_url}")
-        return
-    if not comments:
-        raise RuntimeError(f"Codex returned findings, but none passed inline comment validation: {pr_url}")
+    publishing = bool(comments) and not preview
+    lock = publish_lock(repo, number, reviewer_login) if publishing else nullcontext()
+    with lock:
+        if publishing and has_review(endpoint, headers, marker, reviewer_login):
+            print(f"An inline review by {reviewer_login} already exists for this PR revision: {pr_url}")
+            return
+        current = request_json(endpoint, headers)
+        if (current["state"] != "open" or current["draft"] or
+                current["head"]["sha"] != head or current["base"]["sha"] != base or
+                current["base"]["ref"] != base_ref):
+            raise RuntimeError(f"PR changed during review. Run again on its current revision: {pr_url}")
+        if not findings:
+            print(f"Codex found no actionable findings in the reviewed patches: {pr_url}")
+            return
+        if not comments:
+            raise RuntimeError(f"Codex returned findings, but none passed inline comment validation: {pr_url}")
 
-    review = {"commit_id": head, "event": "COMMENT", "body": f"Codex PR review\n\n{marker}", "comments": comments}
-    if preview:
-        print(json.dumps(review))
-        return
-    result = request_json(f"{endpoint}/reviews", headers, review)
-    print(f"Posted {len(comments)} Codex inline comment(s): {result['html_url']}")
+        review = {"commit_id": head, "event": "COMMENT", "body": f"Codex PR review\n\n{marker}", "comments": comments}
+        if preview:
+            print(json.dumps(review))
+            return
+        result = request_json(f"{endpoint}/reviews", headers, review)
+        print(f"Posted {len(comments)} Codex inline comment(s): {result['html_url']}")
 
 
 def main():
@@ -253,7 +279,7 @@ def main():
             expected_base_ref=args.expected_base_ref, preview=args.preview,
             reviewer_login=args.reviewer_login,
         )
-    except (RuntimeError, KeyError, TypeError, ValueError, TimeoutError) as error:
+    except (RuntimeError, KeyError, TypeError, ValueError, OSError) as error:
         print(f"Review failed: {error}", file=sys.stderr)
         return 1
     return 0

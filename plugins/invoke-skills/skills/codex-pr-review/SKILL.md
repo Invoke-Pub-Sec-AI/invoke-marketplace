@@ -31,7 +31,8 @@ If credentials are available only in GitHub Actions, check the **Codex PR
 review** run for the PR's current head. Use its result if it completed, wait
 if it is running, or rerun it when the user asks to run the review and a
 retry is appropriate. Once the hook is on the default branch, it starts on PR
-open, new commits, reopening, and transition out of draft.
+open, new commits, reopening, transition out of draft, and retargeting to the
+default branch.
 
 The runner uses Codex's [review prompt](references/review-prompt.md) and
 posts one GitHub review with inline comments when it has actionable

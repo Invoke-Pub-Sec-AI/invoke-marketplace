@@ -2,7 +2,10 @@ import contextlib
 import importlib.util
 import io
 import json
+import tempfile
+import threading
 import unittest
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from unittest.mock import patch
 
@@ -27,6 +30,12 @@ class ReviewTests(unittest.TestCase):
             "patch": "@@ -9,2 +9,2 @@\n unchanged\n-old\n+new",
             "additions": 1, "deletions": 1, "changes": 2,
         }
+        self.files = [self.file]
+        lock_dir = tempfile.TemporaryDirectory()
+        self.addCleanup(lock_dir.cleanup)
+        tempdir_patch = patch.object(reviewer.tempfile, "gettempdir", return_value=lock_dir.name)
+        tempdir_patch.start()
+        self.addCleanup(tempdir_patch.stop)
         self.published = []
         self.findings = []
         self.updated_head = None
@@ -38,7 +47,7 @@ class ReviewTests(unittest.TestCase):
         if url == "https://api.github.com/user":
             return {"login": "reviewer"}
         if url.endswith("/files?per_page=100&page=1"):
-            return [self.file]
+            return self.files
         if url.endswith("/reviews?per_page=100&page=1"):
             self.review_lookups += 1
             if self.review_lookups > 1 and self.retarget_on_final_review_lookup:
@@ -72,6 +81,18 @@ class ReviewTests(unittest.TestCase):
         self.assertEqual(review["commit_id"], self.pr["head"]["sha"])
         self.assertEqual(review["comments"], self.findings)
         self.assertEqual(self.published, [])
+
+    def test_preview_reports_a_pure_rename_without_polluting_json(self):
+        self.findings = [{"path": "example.txt", "line": 10, "side": "RIGHT", "body": "Fix the addition."}]
+        self.pr["changed_files"] = 2
+        self.files.append({
+            "filename": "renamed.py", "previous_filename": "original.py", "status": "renamed",
+            "additions": 0, "deletions": 0, "changes": 0,
+        })
+        with contextlib.redirect_stderr(io.StringIO()) as warnings:
+            preview = json.loads(self.run_review(preview=True))
+        self.assertEqual(preview["comments"], self.findings)
+        self.assertIn("renamed.py", warnings.getvalue())
 
     def test_posts_valid_inline_findings_once_with_pinned_head(self):
         valid = {"path": "example.txt", "line": 10, "side": "LEFT", "body": "Fix the removal."}
@@ -117,8 +138,26 @@ class ReviewTests(unittest.TestCase):
     def test_incomplete_patch_is_not_reviewed(self):
         self.file["additions"] = 2
         self.file["changes"] = 3
-        self.assertIn("no complete textual patches", self.run_review())
+        with contextlib.redirect_stderr(io.StringIO()):
+            self.assertIn("no complete textual patches", self.run_review())
         self.assertEqual(self.published, [])
+
+    def test_publish_lock_serializes_same_repo_pr_and_reviewer(self):
+        started = threading.Event()
+        acquired = threading.Event()
+
+        def wait_for_lock():
+            started.set()
+            with reviewer.publish_lock("owner/Repo", 1, "REVIEWER"):
+                acquired.set()
+
+        with ThreadPoolExecutor(max_workers=1) as executor:
+            with reviewer.publish_lock("Owner/repo", 1, "reviewer"):
+                future = executor.submit(wait_for_lock)
+                self.assertTrue(started.wait(2))
+                self.assertFalse(acquired.wait(0.1))
+            future.result(timeout=2)
+        self.assertTrue(acquired.is_set())
 
     def test_parses_multiple_hunks_without_counting_diff_markers(self):
         diff = "@@ -1 +1 @@\n-old\n+new\n\\ No newline at end of file\n@@ -8,0 +9 @@\n+tail"
